@@ -1,0 +1,256 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MindAR Countdown AR</title>
+
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      height: 100%;
+	  background-color: white;
+    }
+
+    a-scene {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #countdown {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 4em;
+      font-weight: bold;
+      color: red;
+      z-index: 9999;
+      display: none;
+      pointer-events: none;
+      text-shadow: 2px 2px 5px white;
+    }
+
+    /* 成功・失敗動画のオーバーレイ設定 */
+    #overlay-success, #overlay-fail {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background-color: white;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9998;
+    }
+
+    #overlay-success video, #overlay-fail video {
+      width: 80vw;
+      max-width: 600px;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <a-scene
+    mindar-image="imageTargetSrc: ./kikatanka.mind; filterMinCF:0.0001; showStats: false; uiScanning: false;"
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights, alpha: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false"
+  >
+    <a-assets>
+      <video id="video1" src="./kk1.mp4" loop muted playsinline crossorigin="anonymous"></video>
+      <video id="video2" src="./kk2.mp4" loop muted playsinline crossorigin="anonymous"></video>
+      <video id="video3" src="./kk3.mp4" loop muted playsinline crossorigin="anonymous"></video>
+      <video id="video4" src="./kk4.mp4" loop muted playsinline crossorigin="anonymous"></video>
+      <video id="video5" src="./kk5.mp4" playsinline crossorigin="anonymous"></video>
+      <video id="video61" src="./kk61.mp4" muted playsinline crossorigin="anonymous"></video>
+      <video id="video62" src="./kk62.mp4" muted playsinline crossorigin="anonymous"></video>
+      <video id="video7" src="./kk7.mp4" playsinline crossorigin="anonymous"></video>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <!-- 通常ターゲット -->
+    <a-entity id="target1" mindar-image-target="targetIndex: 0"></a-entity>
+    <a-entity id="target2" mindar-image-target="targetIndex: 1">
+      <a-plane width="2" height="1.12" position="0 0 0" material="shader: flat; src: #video1"></a-plane>
+    </a-entity>
+    <a-entity id="target3" mindar-image-target="targetIndex: 2">
+      <a-plane width="2" height="1.12" position="0 0 0" material="shader: flat; src: #video2"></a-plane>
+    </a-entity>
+    <a-entity id="target4" mindar-image-target="targetIndex: 3">
+      <a-plane width="2" height="1.12" position="0 0 0" material="shader: flat; src: #video3"></a-plane>
+    </a-entity>
+    <a-entity id="target5" mindar-image-target="targetIndex: 4">
+      <a-plane width="2" height="1.12" position="0 0 0" material="shader: flat; src: #video4"></a-plane>
+    </a-entity>
+    <a-entity id="target6" mindar-image-target="targetIndex: 5">
+      <a-plane width="2" height="1.12" position="0 0 0" material="shader: flat; src: #video5"></a-plane>
+    </a-entity>
+    <a-entity id="target7" mindar-image-target="targetIndex: 6">
+      <a-plane width="2" height="1.12" position="0 0 0" material="shader: flat; src: #video7"></a-plane>
+    </a-entity>
+  </a-scene>
+
+  <!-- 成功・失敗オーバーレイ動画 -->
+  <div id="overlay-success">
+    <video id="overlay-video-success" src="./kk62.mp4" playsinline muted></video>
+  </div>
+  <div id="overlay-fail">
+    <video id="overlay-video-fail" src="./kk61.mp4" playsinline muted></video>
+  </div>
+
+  <div id="countdown">10</div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const targets = [
+        { entity: document.getElementById("target1") }, // 成功判定用ターゲット1
+        { video: document.getElementById("video1"), entity: document.getElementById("target2") }, // kk1
+        { video: document.getElementById("video2"), entity: document.getElementById("target3") }, // kk2
+        { video: document.getElementById("video3"), entity: document.getElementById("target4") }, // kk3
+        { video: document.getElementById("video4"), entity: document.getElementById("target5") }, // kk4
+        { video: document.getElementById("video5"), entity: document.getElementById("target6") }, // kk5 チャレンジ開始
+        { video: document.getElementById("video7"), entity: document.getElementById("target7") }, // kk7 リセット動画
+      ];
+
+      const overlaySuccess = document.getElementById("overlay-success");
+      const overlayFail = document.getElementById("overlay-fail");
+      const overlayVideoSuccess = document.getElementById("overlay-video-success");
+      const overlayVideoFail = document.getElementById("overlay-video-fail");
+
+      const countdownEl = document.getElementById("countdown");
+      let countdownInterval, timeoutId;
+      let challengeStarted = false;
+      let endingTriggered = false;
+
+      function hideOverlays() {
+        overlaySuccess.style.display = "none";
+        overlayFail.style.display = "none";
+        overlayVideoSuccess.pause();
+        overlayVideoSuccess.currentTime = 0;
+        overlayVideoFail.pause();
+        overlayVideoFail.currentTime = 0;
+      }
+
+      function resetState() {
+        console.log("状態リセット");
+        // すべてのAR動画を停止＆巻き戻し
+        targets.forEach(t => {
+          if(t.video){
+            t.video.pause();
+            t.video.currentTime = 0;
+          }
+        });
+        hideOverlays();
+
+        challengeStarted = false;
+        endingTriggered = false;
+
+        clearTimeout(timeoutId);
+        clearInterval(countdownInterval);
+        countdownEl.style.display = "none";
+      }
+
+      // ターゲット2〜5 通常動画再生
+      [1, 2, 3, 4].forEach(i => {
+        targets[i].entity.addEventListener("targetFound", () => {
+          if (!challengeStarted && !endingTriggered) {
+            targets[i].video.play();
+          }
+        });
+      });
+
+      // ターゲット6 チャレンジ開始
+      targets[5].entity.addEventListener("targetFound", () => {
+        if (challengeStarted || endingTriggered) return;
+
+        challengeStarted = true;
+        targets[5].video.play();
+
+        // カウントダウン表示
+        let count = 10;
+        countdownEl.textContent = count;
+        countdownEl.style.display = "block";
+
+        countdownInterval = setInterval(() => {
+          count--;
+          countdownEl.textContent = count;
+          if (count === 0) {
+            clearInterval(countdownInterval);
+            countdownEl.style.display = "none";
+          }
+        }, 1000);
+
+        // タイムアップで失敗エンド表示
+        timeoutId = setTimeout(() => {
+          if (!endingTriggered) {
+            console.log("制限時間終了 → 失敗エンド");
+            targets[5].video.pause();
+            targets[5].video.currentTime = 0;
+            overlayFail.style.display = "flex";
+            overlayVideoFail.play();
+            endingTriggered = true;
+            challengeStarted = false;
+          }
+        }, 10000);
+      });
+
+      // ターゲット1 成功判定
+      targets[0].entity.addEventListener("targetFound", () => {
+        if (!challengeStarted || endingTriggered) return;
+
+        console.log("成功判定：ターゲット1認識");
+        clearTimeout(timeoutId);
+        clearInterval(countdownInterval);
+        countdownEl.style.display = "none";
+
+        targets[5].video.pause();
+        targets[5].video.currentTime = 0;
+
+        overlaySuccess.style.display = "flex";
+        overlayVideoSuccess.play();
+
+        endingTriggered = true;
+        challengeStarted = false;
+      });
+
+      // ターゲット7 kk7再生 → 終了後リロード
+      targets[6].entity.addEventListener("targetFound", () => {
+        console.log("ターゲット7認識：リセット動画再生");
+
+        // すべての動画停止
+        targets.forEach(t => {
+          if (t.video) {
+            t.video.pause();
+            t.video.currentTime = 0;
+          }
+        });
+        hideOverlays();
+        countdownEl.style.display = "none";
+
+        targets[6].video.play();
+
+        targets[6].video.onended = () => {
+          location.reload();
+        };
+      });
+
+      // 初期状態
+      resetState();
+    });
+  </script>
+</body>
+</html>
